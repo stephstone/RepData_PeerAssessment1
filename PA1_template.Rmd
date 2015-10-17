@@ -1,25 +1,95 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+# Reproducible Research: Peer Assessment 1
 
+```{r global_options}
+knitr::opts_chunk$set(fig.height=4, fig.path='figure/',
+                      echo=TRUE, warning=FALSE, message=FALSE)
+```
 
 ## Loading and preprocessing the data
 
+Open and read the csv file, located in local working directory. Format date using strftime to preserve char class for aggregate function used later.
 
+```{r} 
+unzip("activity.zip", "activity.csv")
+df <- read.csv("activity.csv",stringsAsFactors = FALSE,header = TRUE)
+df$date <- strftime(df$date,format = "%Y-%m-%d")
+```
 
 ## What is mean total number of steps taken per day?
 
-
+First create summary data frame of steps by day. See /figure folder for histogram.
+```{r histogram}
+step_sum <- aggregate(df$steps ~ date,df,FUN=sum)
+names(step_sum) <- c("date","steps")
+hist(step_sum$steps,main = "histogram", xlab="Steps Taken/Day",ylab="Frequency",col="magenta")
+```
+median and mean calculated using summary data frame 
+```{r}
+cat("median of total daily steps is ",median(step_sum$steps))
+cat("mean of total daily steps is ",mean(step_sum$steps))
+```
 
 ## What is the average daily activity pattern?
 
+Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).  See /figure folder for plot.
+```{r interval_plot}
+library(ggplot2)
+qplot(interval,steps,data = df, stat = 'summary',fun.y = 'mean',geom='line',na.rm=TRUE)
+```
 
+Calculate 5-minute interval, on average across all the days in the dataset, containing the maximum number of steps.  First part creates a summary data frame by interval (across days).  Second part returns the looked up value of interval associated with the maximum number of steps.
+
+```{r}
+tempdf <- aggregate(df$steps ~ interval,df,FUN=sum)
+cat("interval with max steps is ",tempdf[tempdf[,2] == max(tempdf[,2]),1])
+```
 
 ## Imputing missing values
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r}
+sum(is.na(df))
+```
 
+Devise a strategy for filling in all of the missing values in the dataset --  I used mean of the 5-minute interval across all days. Create a new dataset that is equal to the original dataset but with the missing data filled in:
+
+```{r}
+df2 <- df ##copy dataframe to new dataframe
+tempdf <- aggregate(df$steps ~ interval,df,FUN=mean) ##repurpose tempdf to aggregate by mean
+for (i in 1:length(df2[,1])) {
+  if (is.na(df2[i,1])) {df2[i,1] <- tempdf[tempdf[,1] == df2[i,3],2]} ##replace NAs with means
+}
+```
+
+
+Make a histogram of the total number of steps taken each day (see /figure folder) and report the mean and median total number of steps taken per day. 
+
+```{r histogram_imputed}
+step_sum2 <- aggregate(df2$steps ~ date,df,FUN=sum) ##summary df of total steps/day
+names(step_sum2) <- c("date","steps")
+hist(step_sum2$steps,main = "histogram of steps/day", xlab="Steps Taken / Day",ylab="Frequency",col="magenta")
+cat("median of total daily steps (w imputed vals) is ",median(step_sum2$steps))
+cat("mean of total daily steps (w imputed vals) is ",mean(step_sum2$steps))
+```
+
+Adding values increases the number of observations used in mean and median; because means were used as imputed values, the summary mean remains the same.  Due to the added observations, however, the median moves slightly.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+First, created a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r}
+df <- df[order(df$steps,df$date,df$interval),] ##first sort data frame to keep factoring consistent / reproduceable 
+df$weekday <- weekdays(as.Date(df$date))  ##create new column with weekday name
+df$weekday <- factor(df$weekday) ##convert to factor
+levels(df$weekday) <- c("Weekday","Weekday","Weekend","Weekend","Weekday","Weekday","Weekday") ##coalesce to weekday/weekend
+```
+
+Panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See /figure directory for saved plot
+
+```{r}
+library(ggplot2)
+qplot(interval,steps,facets=.~weekday,data = df, stat = 'summary',fun.y = 'mean',geom='line',na.rm=TRUE)
+```
+
+
